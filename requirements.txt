@@ -1,0 +1,11 @@
+# Python Environment Requirements for SAXS Data Reduction Pipeline
+# BESSY II µSpot Beamline (18 keV, Dectris Eiger 9M)
+# Python >= 3.8
+
+numpy>=1.20.0
+scipy>=1.7.0
+matplotlib>=3.5.0
+h5py>=3.6.0
+hdf5plugin>=3.2.0     # Critical: provides bitshuffle and lz4 decompressors for Eiger HDF5
+fabio>=0.13.0         # Image I/O for 2D X-ray detectors (TIFF, HDF5, EDF)
+pyFAI>=0.21.0         # Fast Azimuthal Integration for X-ray diffraction & SAXS

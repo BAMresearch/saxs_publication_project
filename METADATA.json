@@ -1,0 +1,75 @@
+{
+  "@context": "https://schema.org/",
+  "@type": "Dataset",
+  "name": "BESSY II µSpot In-Situ Flow-Through SAXS Data Reduction & Uncertainty Analysis Dataset",
+  "description": "Small-Angle X-ray Scattering (SAXS) in-situ flow-through reaction monitoring dataset and 7-component analytical error propagation reduction pipeline collected at the BESSY II µSpot beamline (18 keV, Dectris Eiger 9M detector) during the March 2026 beamtime.",
+  "keywords": [
+    "Small-Angle X-ray Scattering",
+    "SAXS",
+    "In-situ Flow-Through",
+    "Synchrotron Radiation",
+    "BESSY II",
+    "µSpot",
+    "Dectris Eiger 9M",
+    "Data Reduction",
+    "Analytical Error Propagation",
+    "Structural Scattering Invariant"
+  ],
+  "creator": [
+    {
+      "@type": "Person",
+      "name": "Tomasz",
+      "affiliation": {
+        "@type": "Organization",
+        "name": "Helmholtz-Zentrum Berlin für Materialien und Energie / Collaborating Institutions"
+      }
+    }
+  ],
+  "datePublished": "2026-09-17",
+  "inLanguage": "en",
+  "license": "https://creativecommons.org/licenses/by/4.0/",
+  "distribution": [
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "application/x-hdf5",
+      "contentUrl": "reduced_data/Exp2_1/Diffraction/HDF5/MultiRed_All/MultiRed_All.hdf5"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/plain",
+      "contentUrl": "metadata/spec_files/ML_18keV_17th_March_2026.dat"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/html",
+      "contentUrl": "saxs_data_reduction_report.html"
+    }
+  ],
+  "measurementTechnique": "Small-Angle X-ray Scattering (SAXS)",
+  "variableMeasured": [
+    "Scattering Vector q [nm^-1]",
+    "Differential Scattering Cross-Section dSigma/dOmega [cm^-1]",
+    "Propagated 1-sigma Uncertainty [cm^-1]",
+    "Relative Sample Transmission",
+    "Beam Incident Monitor Flux I0",
+    "Structural Scattering Invariant Q [cm^-1 nm^-3]"
+  ],
+  "instrument": {
+    "@type": "Thing",
+    "name": "µSpot Beamline at BESSY II",
+    "description": "Microfocus SAXS/WAXS beamline with Si(111) DCM at 18.00 keV and Dectris Eiger 9M active pixel detector"
+  },
+  "geometry": {
+    "sampleToDetectorDistance_m": 0.373278,
+    "beamCenterPixelX": 1638.1387,
+    "beamCenterPixelY": 1412.0579,
+    "pixelPitch_um": 75.0,
+    "photonEnergy_keV": 18.00,
+    "wavelength_nm": 0.06889159
+  },
+  "calibrationStandards": {
+    "glassyCarbonStandardFactor": 385.2002,
+    "glassyCarbonStandardFactorError": 1.3760,
+    "calibrantReference": "Quartz Capillary Standard (scans 57-58)"
+  }
+}

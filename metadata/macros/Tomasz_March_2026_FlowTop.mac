@@ -1,0 +1,144 @@
+## for Tomasz. March 2026
+########################################################
+p epics_par("micfoc6050:DI11", "timeout",2)
+p epics_par("micfoc6050:SDO5", "timeout",0.5)
+
+unuse_eiger_safepos
+unuse_beamstop_check
+unuse_check_beam
+plotselect 18
+epics_put("micfoc6050:SDO5",0)
+
+vfshclose
+fshopen
+mv filt3 1
+global myspot_sleeptime
+global myspot_keythlyval,myspot_montresh
+global myspot_usevfsh
+global myspot_closedgate,myspot_usegate
+global myspot_samplein_x,myspot_samplein_z
+
+seteigername LUKU2026030601PF
+setxrfname LUKU2026030601PF
+
+#### SYSTEM PARAMETERS
+myspot_sleeptime=5
+myspot_montresh=0.2
+myspot_keythlyval=6.0e-9
+myspot_usevfsh=1
+myspot_usegate=1
+myspot_closedgate=1
+
+#### COORDINATES
+local xs,zs, sol_sam, sol_cr2
+local cr2_time,cr2_last
+local iii,jjj,nloops
+
+local nframes, dt
+local delta_x, nrows
+
+
+
+xs=myspot_samplein_x
+zs=myspot_capillary_top
+
+sol_sam = 10
+sol_cr2 = 0
+cr2_time = 900
+delta_x=0.5
+
+
+####################################
+####################################
+####################################
+####### user parameters
+####################################
+####################################
+####################################
+####################################
+
+
+####################################
+####################################
+####################################
+####################################
+####################################
+
+mv samplex xs
+mv mz zs
+
+#### INITIAL REALIGNMENT
+
+##### CR2 REALIGNMENT
+vfshclose
+plotselect 22
+mv filt3 1
+mv solinit sol_cr2
+
+fshopen
+while(epics_get("K64851MF102L:14.VAL")<myspot_montresh*myspot_keythlyval){sleep(0.01); fshopen}
+dscan cr2vetr .1 -.1 20 1
+pic
+plotselect 18
+
+cr2_last=time()
+############
+
+
+print 'Waiting for Digital In to be activated'
+while(myspot_closedgate==epics_get("micfoc6050:DI11"))
+    {
+        sleep(0.05)
+    }
+print 'Digital Out Activated'
+
+
+iii=0
+
+
+##### HERE WE INJECT AND WE START THE MEASURING LOOP
+dt=10
+nframes = 11
+nloops=300000000
+myspot_sleeptime=5
+nrows = 5
+
+umv mz zs
+umv hgx 1.5 
+
+######
+
+for(jjj=0; jjj<nloops+1;jjj++) {
+
+if(time()-cr2_last>=cr2_time){
+
+print '...Aligning Crystal CR2VETR....'
+#### CR2 REALIGNMENT
+vfshclose
+plotselect 22
+mv filt3 1
+mv solinit sol_cr2
+fshopen
+while(epics_get("K64851MF102L:14.VAL")<myspot_montresh*myspot_keythlyval){sleep(0.01); fshopen}
+dscan cr2vetr .1 -.1 20 1
+pic
+plotselect 18
+cr2_last=time()
+############
+
+}
+
+
+mv solinit sol_sam 
+
+#### FLOWING SCAN
+print '...Starting Flowing Scan....', jjj+1
+
+filter_eigerxrfmesh kox xs-delta_x xs+delta_x nframes-1 mz zs zs nrows-1 dt
+
+
+}
+
+epics_put("micfoc6050:SDO5",0)
+
+## qdo /home/data/MPI/macros/Tomasz_March_2026_FlowTop.mac

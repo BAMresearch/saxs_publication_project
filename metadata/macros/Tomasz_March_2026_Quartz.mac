@@ -1,0 +1,52 @@
+## for Tomasz. March. 2026
+########################################################
+p epics_par("micfoc6050:DI11", "timeout",2)
+p epics_par("micfoc6050:SDO5", "timeout",0.5)
+
+unuse_eiger_safepos
+unuse_beamstop_check
+unuse_check_beam
+plotselect 10
+epics_put("micfoc6050:SDO5",0)
+
+vfshclose
+fshopen
+
+global myspot_sleeptime
+global myspot_keythlyval,myspot_montresh
+global myspot_usevfsh
+global myspot_sleeptime
+global myspot_closedgate,myspot_usegate
+
+#### SYSTEM PARAMETERS
+myspot_sleeptime=0
+myspot_montresh=0.3
+myspot_keythlyval=6.4e-9
+myspot_usevfsh=1
+myspot_usegate=0
+myspot_closedgate=0
+
+local iii,dh,h0
+
+h0=1.5
+dh=0.2
+
+#############
+#############
+#############
+
+for(iii=0; iii<5+1;iii++) {
+seteigername Quartz
+setxrfname Quartz
+
+umv kox 80.53000
+mv mz 2.5
+mv hgx h0+iii*dh
+
+vfshopen
+eigerxrfdscan kox -.5 .5 10 10
+vfshclose
+
+}
+
+## qdo /home/data/MPI/macros/Tomasz_March_2026_Quartz.mac
