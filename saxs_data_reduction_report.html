@@ -474,31 +474,41 @@
       <p>Documentation of the data reduction protocol implemented in Spiger 2.0, covering single-frame reduction for Scan #184 and file index for the in-situ kinetic series across Scans #184 to #292.</p>
     </header>
 
-    <!-- Key Metrics Cards -->
-    <section class="metrics-grid">
+    <!-- Metrics Summary Grid -->
+    <div class="metrics-grid">
       <div class="metric-card">
-        <div class="metric-label">Photon energy and wavelength</div>
-        <div class="metric-value">17.982 keV</div>
-        <div class="metric-sub">&lambda; = 0.6889 Å &bull; Mo/B₄C Multilayer</div>
+        <div class="metric-label">Target sample measurement</div>
+        <div class="metric-value">Scan #184</div>
+        <div class="metric-sub">Frame 1 &bull; 10.0 s (7.33 s live)</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">Detector and geometry</div>
-        <div class="metric-value">Dectris Eiger 9M</div>
-        <div class="metric-sub">Dist = 373.28 mm &bull; 75 &mu;m pixel</div>
+        <div class="metric-label">Capillary buffer background</div>
+        <div class="metric-value">Scan #63</div>
+        <div class="metric-sub">Frame 1 &bull; 15.0 s (9.37 s live)</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">Relative transmission</div>
-        <div class="metric-value">0.6489</div>
-        <div class="metric-sub">T_sam = 0.3491 / T_bkg = 0.5380</div>
+        <div class="metric-label">Relative transmission ($T_{\mathrm{rel}}$)</div>
+        <div class="metric-value">0.64890</div>
+        <div class="metric-sub">&plusmn; 0.01846 (Dead-time corrected)</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">Standard factor</div>
-        <div class="metric-value">385.20 cm⁻¹</div>
-        <div class="metric-sub">Glassy carbon absolute scaling</div>
+        <div class="metric-label">Glassy carbon scale ($K_{\mathrm{std}}$)</div>
+        <div class="metric-value">385.20 cm<sup>-1</sup></div>
+        <div class="metric-sub">&plusmn; 6.64 cm<sup>-1</sup> (Absolute scaling)</div>
       </div>
-    </section>
+      <div class="metric-card">
+        <div class="metric-label">Active masked pixels</div>
+        <div class="metric-value">7.75%</div>
+        <div class="metric-sub">Dilated gaps + sentinels + spikes</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Kinetic series scope</div>
+        <div class="metric-value">16.15 hrs</div>
+        <div class="metric-sub">Scans #184 &rarr; #292 (206 time points)</div>
+      </div>
+    </div>
 
-    <!-- SECTION: Overview & Master Publication Figure -->
+    <!-- SECTION 0: Consolidated Publication Figure -->
     <section id="overview" class="section">
       <div class="section-header">
         <div class="section-num">00</div>
@@ -517,7 +527,7 @@
             <strong>(c)</strong> Normalized background buffer scattering frame.
             <strong>(d)</strong> Net sample 2D scattering pattern after transmission attenuation scaling and background subtraction.
             <strong>(e)</strong> 2D azimuthal cake representation $I(q, \chi)$.
-            <strong>(f)</strong> Calibrated 1D absolute scattering profile $\frac{d\Sigma}{d\Omega}(q)$ in $\text{cm}^{-1}$ across isotropic ($0-360^\circ$), meridian ($45-135^\circ$), and equatorial ($-45-45^\circ$) sectors.
+            <strong>(f)</strong> Calibrated 1D absolute scattering profile $\frac{d\Sigma}{d\Omega}(q)$ in $\text{cm}^{-1}$ displaying total measured data $I_{meas}(q)$ (dotted), capillary background $I_{bkg}(q)$ (dashed), and net profile $I_{sub}(q)$ with shaded $\pm 1\sigma_I$ uncertainty band and sector cuts.
           </p>
         </div>
       </div>
@@ -620,33 +630,168 @@
     <section id="step4" class="section">
       <div class="section-header">
         <div class="section-num">04</div>
-        <h2 class="section-title">Step 4: Transmission correction and background subtraction</h2>
+        <h2 class="section-title">Step 4: Capillary background subtraction and transmission correction</h2>
       </div>
 
-      <p style="color: var(--text-secondary); margin-bottom: 0.85rem;">
-        When measuring solutions inside glass capillaries, the sample attenuates the incident beam, decreasing the transmitted background contribution. The relative transmission $T_{rel}$ is calculated directly from the transmitted XRF peak (<span class="code-span">roi3</span>):
+      <!-- Step 4 Description -->
+      <p style="color: var(--text-secondary); margin-bottom: 1.25rem;">
+        Azimuthal radial integration is performed directly on the masked raw 2D detector patterns before subtraction to preserve pure Poisson counting statistics. 1D monitor normalization, attenuation correction, and buffer subtraction are executed in reciprocal space ($q$). The 2D differential frame $I_{\mathrm{sub}}(x, y)$ is computed alongside as a qualitative diagnostic tool for spatial alignment and parasitic scatter cancellation.
       </p>
 
+      <!-- Figure 4a: Quantitative 1D Capillary Background Subtraction -->
       <div class="figure-card">
-        <div class="figure-img-container" onclick="openModal('publication_figures/step4_background_subtraction_2d.png')">
-          <img src="publication_figures/step4_background_subtraction_2d.png" alt="Step 4: Background subtraction and transmission correction">
+        <div class="figure-img-container" onclick="openModal('publication_figures/step4_capillary_subtraction_1d.png')">
+          <img src="publication_figures/step4_capillary_subtraction_1d.png" alt="Step 4a: Quantitative 1D capillary background subtraction and signal decomposition">
         </div>
         <div class="figure-body">
           <p class="figure-caption">
-            <strong>Figure 4 | Transmission scaling and background cancellation.</strong> 
-            <strong>(a)</strong> Attenuation-corrected sample frame: $\frac{I_{sample}}{I_0 \cdot T_{rel}}$.
-            <strong>(b)</strong> Pure capillary buffer background: $\frac{I_{bkg}}{I_{0,bkg}}$.
-            <strong>(c)</strong> Resulting 2D net sample scattering pattern $I_{sub}(x, y)$ plotted on a symmetric logarithmic scale, showing complete cancellation of parasitic capillary scatter.
+            <strong>Figure 4a | Quantitative 1D capillary background subtraction and signal decomposition.</strong> 
+            <strong>(a)</strong> Full 1D scattering profiles showing measured total intensity $I_{\mathrm{meas}}(q)$ (sample in capillary, blue curve), pure capillary background $I_{\mathrm{bkg}}(q)$ (Scan #63, red dashed curve), and net subtracted sample cross-section $I_{\mathrm{sub}}(q) = I_{\mathrm{meas}}(q) - I_{\mathrm{bkg}}(q)$ (green curve) with propagated 1D uncertainty band ($\pm 1\sigma_I$) and shaded net subtracted signal area ($\Delta I$).
+            <strong>(b)</strong> Intermediate and wide-angle detail plotted on a linear scale ($\frac{d\Sigma}{d\Omega}$) showing the capillary amorphous scattering plateau where the background reaches $\approx 85\%$ of the measured total signal, followed by sample diffraction peaks rising above the background.
+            <strong>(c)</strong> Capillary background contribution fraction $f_{\mathrm{bkg}}(q) = \frac{I_{\mathrm{bkg}}(q)}{I_{\mathrm{meas}}(q)} \times 100\%$ revealing where capillary scatter dominates (mid-$q$) versus where the sample dominates (low-$q$ and high-$q$).
+            <strong>(d)</strong> Signal-to-background ratio $\mathrm{SBR}(q) = \frac{I_{\mathrm{sub}}(q)}{I_{\mathrm{bkg}}(q)}$ demonstrating high fidelity with $\mathrm{SBR} \approx 5-10$ at small angles and wide angles.
           </p>
         </div>
       </div>
 
+      <!-- Quantitative Analysis Box -->
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;">
+        <h3 style="font-size: 1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.6rem;">
+          Quantitative analysis: how the capillary background is subtracted
+        </h3>
+        <p style="color: var(--text-secondary); font-size: 0.86rem; line-height: 1.55; margin-bottom: 0.85rem;">
+          In small-angle X-ray scattering experiments of liquids or solutions loaded inside a cylindrical capillary, the total recorded photon count rate includes scattering from the capillary glass walls, air path, and the sample itself. The sample attenuates both the incident beam and the background scattering by its relative transmission $T_{\mathrm{rel}}$.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.85rem; margin-bottom: 0.85rem;">
+          <div style="background: var(--bg-secondary); padding: 0.85rem 1rem; border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="font-weight: 600; color: #38bdf8; font-size: 0.82rem; margin-bottom: 0.3rem;">1. Small-angle forward scatter ($q < 0.5\text{ nm}^{-1}$)</div>
+            <div style="font-size: 0.80rem; color: var(--text-secondary); line-height: 1.45;">
+              Nanoscale particulate, pore, and structural scattering strongly dominate. The capillary background represents only <strong>10% – 25%</strong> of the total signal ($\mathrm{SBR} \approx 5-10$).
+            </div>
+          </div>
+          <div style="background: var(--bg-secondary); padding: 0.85rem 1rem; border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="font-weight: 600; color: #f87171; font-size: 0.82rem; margin-bottom: 0.3rem;">2. Capillary scatter plateau ($q \approx 0.8 - 4.0\text{ nm}^{-1}$)</div>
+            <div style="font-size: 0.80rem; color: var(--text-secondary); line-height: 1.45;">
+              The sample structural form factor decays to a minimum, and amorphous diffuse scattering from the borosilicate capillary glass dominates, reaching <strong>up to 85.3%</strong> of total measured intensity ($\mathrm{SBR} \approx 0.17$). Precise transmission scaling ($T_{\mathrm{rel}} = 0.6489$) is critical to prevent over- or under-subtraction.
+            </div>
+          </div>
+          <div style="background: var(--bg-secondary); padding: 0.85rem 1rem; border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="font-weight: 600; color: #4ade80; font-size: 0.82rem; margin-bottom: 0.3rem;">3. Wide-angle diffraction ($q > 5\text{ nm}^{-1}$)</div>
+            <div style="font-size: 0.80rem; color: var(--text-secondary); line-height: 1.45;">
+              Intermolecular correlation and atomic ordering peaks emerge clearly. The capillary background falls off rapidly, allowing the sample signal to rise back up to <strong>$\mathrm{SBR} \approx 5-8$</strong>.
+            </div>
+          </div>
+        </div>
+        <p style="color: var(--text-secondary); font-size: 0.86rem; line-height: 1.55; margin: 0;">
+          <strong>Algebraic subtraction factor:</strong> Expressed directly in detector raw counts, the net signal is computed as $I_{\mathrm{sub}}(q) = \frac{K_{\mathrm{std}}}{I_{0,\mathrm{sam}} \cdot T_{\mathrm{rel}}} [ I_{\mathrm{sam}}(q) - c_{\mathrm{bkg}} \cdot I_{\mathrm{bkg}}(q) ]$, where the attenuation-compensated background scale factor is:
+          $$c_{\mathrm{bkg}} = T_{\mathrm{rel}} \cdot \frac{I_{0,\mathrm{sam}}}{I_{0,\mathrm{bkg}}} = 0.648902 \cdot \frac{627109}{973266} = \mathbf{0.41814}$$
+          accounting exactly for the $10\text{ s}$ vs $15\text{ s}$ exposure time ratio ($0.667$) and beam absorption through the specimen ($0.6489$).
+        </p>
+      </div>
+
+      <!-- Empty Beamline Background Explanation -->
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;">
+        <h3 style="font-size: 1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.6rem;">
+          Empty beamline background: role and subtraction protocol
+        </h3>
+        <p style="color: var(--text-secondary); font-size: 0.86rem; line-height: 1.55; margin-bottom: 0.85rem;">
+          The <strong>empty beamline background</strong> (Scan #47 <span class="code-span">AirGlassy_000047</span>, $t_{\mathrm{exp}} = 15\text{ s}$, $I_0 = 915,218$) records instrument scatter without a capillary or sample holder in the beam. It measures parasitic air scattering along the flight path, flight tube window scattering, and beamstop edge flare. Shutter-closed detector dark counts were verified to be strictly zero on the photon-counting Eiger 9M (Scan #61 <span class="code-span">BeamOff_000061</span>).
+        </p>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; margin-bottom: 0.85rem;">
+          <div style="background: var(--bg-secondary); padding: 0.85rem 1rem; border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="font-weight: 600; color: var(--accent); font-size: 0.82rem; margin-bottom: 0.3rem;">1. Inherent cancellation via capillary scan</div>
+            <div style="font-size: 0.80rem; color: var(--text-secondary); line-height: 1.45;">
+              In flow-through capillary geometry, the capillary background measurement (Scan #63 <span class="code-span">CapillaryTop</span>) is positioned directly in the beam path. It already contains both the borosilicate glass scatter and the transmitted empty beamline / air scattering:
+              $$I_{\mathrm{cap}}(q) = I_{\mathrm{glass}}(q) + T_{\mathrm{cap}} \cdot I_{\mathrm{air}}(q)$$
+              Therefore, subtracting the capillary background ($I_{\mathrm{meas}} - T_{\mathrm{rel}} I_{\mathrm{cap}}$) <strong>already and inherently subtracts the empty beamline background</strong>.
+            </div>
+          </div>
+          <div style="background: var(--bg-secondary); padding: 0.85rem 1rem; border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="font-weight: 600; color: #ef4444; font-size: 0.82rem; margin-bottom: 0.3rem;">2. Avoiding double-subtraction error</div>
+            <div style="font-size: 0.80rem; color: var(--text-secondary); line-height: 1.45;">
+              The empty beamline scan is <strong>not</strong> subtracted as an additional step. Doing so would subtract the air and beamstop flare twice:
+              $$I_{\mathrm{corrupted}}(q) = I_{\mathrm{meas}}(q) - I_{\mathrm{cap}}(q) - I_{\mathrm{air}}(q)$$
+              This causes severe unphysical deficits ($I < 0$) across intermediate $q$ ($0.4 - 10\text{ nm}^{-1}$, Figure 4b, panel d).
+            </div>
+          </div>
+        </div>
+
+        <p style="color: var(--text-secondary); font-size: 0.86rem; line-height: 1.55; margin: 0;">
+          <strong>Decomposition of capillary scattering:</strong> Subtracting the air scan from the capillary scan ($I_{\mathrm{glass}} = I_{\mathrm{cap}} - T_{\mathrm{cap}} I_{\mathrm{air}}$) isolates the pure borosilicate glass scatter, revealing its characteristic amorphous halo at $q \approx 15.5\text{ nm}^{-1}$ (Figure 4b, panel c). At small angles ($q < 0.3\text{ nm}^{-1}$), parasitic air scatter accounts for $>90\%$ of total capillary scatter.
+        </p>
+      </div>
+
+      <!-- Figure 4b: Empty Beamline Background Analysis -->
+      <div class="figure-card">
+        <div class="figure-img-container" onclick="openModal('publication_figures/step4c_empty_beamline_background.png')">
+          <img src="publication_figures/step4c_empty_beamline_background.png" alt="Step 4b: Empty beamline background comparison and subtraction protocol">
+        </div>
+        <div class="figure-body">
+          <p class="figure-caption">
+            <strong>Figure 4b | Empty beamline background comparison and subtraction protocol.</strong> 
+            <strong>(a)</strong> Complete scattering decomposition across full $q$-range: Sample $I_{\mathrm{meas}}(q)$ (blue), capillary buffer $I_{\mathrm{cap}}(q)$ (red dashed), empty beamline / air $I_{\mathrm{air}}(q)$ (amber dash-dot), net sample $I_{\mathrm{sub}}(q)$ (green solid), and detector dark noise $I_{\mathrm{dark}}(q) \approx 0$ (gray dotted).
+            <strong>(b)</strong> Low-$q$ regime ($0.1 - 2.0\text{ nm}^{-1}$): Air scatter accounts for over 90% of the capillary background at low angles, demonstrating why capillary subtraction cleanly cancels beamline parasitic flares.
+            <strong>(c)</strong> Physical decomposition of capillary buffer into transmitted air background ($T_{\mathrm{cap}} \cdot I_{\mathrm{air}}$) and isolated borosilicate glass ($I_{\mathrm{glass}} = I_{\mathrm{cap}} - T_{\mathrm{cap}} I_{\mathrm{air}}$), displaying the amorphous glass peak at $q \approx 15.5\text{ nm}^{-1}$.
+            <strong>(d)</strong> Demonstration of double-subtraction avoidance: Correct single capillary subtraction ($I_{\mathrm{meas}} - I_{\mathrm{cap}}$, green) vs erroneous double subtraction ($I_{\mathrm{meas}} - I_{\mathrm{cap}} - I_{\mathrm{air}}$, red dashed), which drops into negative counts across $q = 0.4 - 10\text{ nm}^{-1}$.
+          </p>
+        </div>
+      </div>
+
+      <!-- Figure 4c: 2D Diagnostic Subtraction -->
+      <div class="figure-card">
+        <div class="figure-img-container" onclick="openModal('publication_figures/step4_background_subtraction_2d.png')">
+          <img src="publication_figures/step4_background_subtraction_2d.png" alt="Step 4c: Background subtraction and transmission correction">
+        </div>
+        <div class="figure-body">
+          <p class="figure-caption">
+            <strong>Figure 4c | Transmission scaling and 2D diagnostic subtraction.</strong> 
+            <strong>(a)</strong> Attenuation-corrected sample frame: $\frac{I_{\mathrm{sample}}}{I_0 \cdot T_{\mathrm{rel}}}$.
+            <strong>(b)</strong> Pure capillary buffer background: $\frac{I_{\mathrm{bkg}}}{I_{0,\mathrm{bkg}}}$.
+            <strong>(c)</strong> 2D net sample scattering pattern $I_{\mathrm{sub}}(x, y)$ plotted on a symmetric logarithmic scale for qualitative inspection of parasitic capillary scatter cancellation.
+          </p>
+        </div>
+      </div>
+
+      <!-- Detector Physics: ROI3 Livetime Correction & Pulse Pileup -->
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;">
+        <h3 style="font-size: 1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.6rem;">
+          Detector physics: ROI3 livetime correction and pulse pileup
+        </h3>
+        <p style="color: var(--text-secondary); font-size: 0.86rem; line-height: 1.55; margin-bottom: 0.85rem;">
+          The transmitted direct beam is recorded by an energy-dispersive X-ray fluorescence detector / multi-channel analyzer (MCA) focused on peak <span class="code-span">roi3</span>.
+          At synchrotron flux densities, incoming X-ray photons arrive closely spaced in time. If a photon arrives within the finite pulse-shaping and analog-to-digital processing time ($\tau_{\mathrm{dead}}$) of a preceding event, <strong>electronic pulse pileup</strong> occurs.
+        </p>
+        <p style="color: var(--text-secondary); font-size: 0.86rem; line-height: 1.55; margin-bottom: 0.85rem;">
+          During pileup processing, the acquisition hardware is incapacitated from registering new pulses, resulting in detector dead time ($t_{\mathrm{dead}} = t_{\mathrm{sec}} - t_{\mathrm{live}}$). The MCA hardware timer independently clocks both the elapsed clock time ($t_{\mathrm{sec}}$, <span class="code-span">Seconds</span>) and the effective live counting time ($t_{\mathrm{live}}$, <span class="code-span">ltime</span>):
+        </p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; margin-bottom: 0.85rem;">
+          <div style="background: var(--bg-secondary); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Sample scan #184 (attenuated beam)</div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; color: var(--text-primary); margin-top: 0.2rem;">
+              $t_{\mathrm{sec}} = 10.0\text{ s}, \quad t_{\mathrm{live}} = 7.33\text{ s}$<br>
+              $\text{Dead Time} = \mathbf{26.68\%}$
+            </div>
+          </div>
+          <div style="background: var(--bg-secondary); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Background scan #63 (empty capillary)</div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; color: var(--text-primary); margin-top: 0.2rem;">
+              $t_{\mathrm{sec}} = 15.0\text{ s}, \quad t_{\mathrm{live}} = 9.37\text{ s}$<br>
+              $\text{Dead Time} = \mathbf{37.50\%}$
+            </div>
+          </div>
+        </div>
+        <p style="color: var(--text-secondary); font-size: 0.86rem; line-height: 1.55; margin: 0;">
+          <strong>Why this correction is critical:</strong> Because the capillary buffer without sample absorbs less beam, significantly more transmitted photons strike the detector per second, causing <strong>substantially higher pileup and dead time (37.5% vs 26.7%)</strong>. If uncorrected, the background transmitted count rate would be artificially depressed by pileup losses. Correcting $N_{\mathrm{ROI3}}$ by $t_{\mathrm{live}}$ extracts the true incoming event rate $\text{Rate}_{\mathrm{ROI3}} = N_{\mathrm{ROI3}} / t_{\mathrm{live}}$, accurately compensating for pileup effects.
+        </p>
+      </div>
+
       <div class="math-block">
-        <div class="math-title">Transmission extraction and subtraction equation</div>
-        $$T = \frac{N_{ROI3} \cdot t_{exp}}{t_{live} \cdot I_0} \implies T_{sample} = 0.349127, \quad T_{bkg} = 0.538027$$
-        $$T_{rel} = \frac{T_{sample}}{T_{bkg}} = \mathbf{0.648902} \pm 0.001994$$
-        $$I_{sub}(x, y) = K_{std} \cdot \left[ \frac{I_{sample}(x, y)}{I_{0,sample} \cdot T_{rel}} - \frac{I_{bkg}(x, y)}{I_{0,bkg}} \right]$$
-        where $K_{std} = 385.2002\text{ cm}^{-1}$ is the glassy carbon standard factor for absolute intensity calibration.
+        <div class="math-title">Livetime transmission extraction and 1D subtraction formulas</div>
+        $$T = \frac{N_{\mathrm{ROI3}} \cdot t_{\mathrm{exp}}}{t_{\mathrm{live}} \cdot I_0} \implies T_{\mathrm{sample}} = 0.349127, \quad T_{\mathrm{bkg}} = 0.538027$$
+        $$T_{\mathrm{rel}} = \frac{T_{\mathrm{sample}}}{T_{\mathrm{bkg}}} = \mathbf{0.648902} \pm 0.01846$$
+        $$\text{Quantitative 1D Reduction: } I_{\mathrm{sub}}(q) = K_{\mathrm{std}} \cdot \left[ \frac{I_{\mathrm{sample}}(q)}{I_{0,\mathrm{sample}} \cdot T_{\mathrm{rel}}} - \frac{I_{\mathrm{bkg}}(q)}{I_{0,\mathrm{bkg}}} \right]$$
+        where $K_{\mathrm{std}} = 385.2002\text{ cm}^{-1}$ is the glassy carbon standard scaling factor for absolute intensity calibration.
       </div>
     </section>
 
@@ -658,16 +803,16 @@
       </div>
 
       <p style="color: var(--text-secondary); margin-bottom: 0.85rem;">
-        Quantification of experimental uncertainties is used for SAXS modeling, Guinier fits, and Porod invariant calculations. The pipeline implements the analytical error propagation defined in Spiger (<span class="code-span">integrator20.py</span>), calculating seven independent variance components for each pixel $(x, y)$:
+        Quantification of experimental uncertainties is essential for SAXS modeling, Guinier fits, and Porod invariant calculations. The pipeline implements the analytical error propagation defined in Spiger (<span class="code-span">integrator20.py</span>). Below, 2D spatial uncertainty $\sigma(x, y)$ and pixel SNR maps provide spatial diagnostic insight across the active detector area:
       </p>
 
       <div class="figure-card">
         <div class="figure-img-container" onclick="openModal('publication_figures/step4b_uncertainty_and_snr_2d.png')">
-          <img src="publication_figures/step4b_uncertainty_and_snr_2d.png" alt="Step 4b: 2D spatial uncertainty and SNR map">
+          <img src="publication_figures/step4b_uncertainty_and_snr_2d.png" alt="Step 4d: 2D spatial uncertainty and SNR map">
         </div>
         <div class="figure-body">
           <p class="figure-caption">
-            <strong>Figure 4b | 2D spatial uncertainty propagation and pixel-level SNR.</strong> 
+            <strong>Figure 4d | 2D spatial uncertainty propagation and pixel-level SNR (diagnostic).</strong> 
             <strong>(a)</strong> Propagated 2D uncertainty $\sigma(x, y)$ in absolute units $[\mathrm{cm}^{-1}]$ across the active detector area. Uncertainty is highest near the beam center where incident flux and background scatter are concentrated, dropping toward high scattering angles.
             <strong>(b)</strong> 2D pixel signal-to-noise ratio $\mathrm{SNR}(x, y) = |I_{sub}(x, y)| / \sigma(x, y)$. The central SAXS core achieves high statistical significance ($\mathrm{SNR} > 20$), while the wide-angle diffuse background operates at photon-limited thresholds ($\mathrm{SNR} \sim 1 - 3$).
           </p>
@@ -675,8 +820,10 @@
       </div>
 
       <div class="math-block">
-        <div class="math-title">Seven-component pixel variance propagation formula</div>
-        $$\sigma_{sub}^2(x, y) = \underbrace{\left( K_{std} \frac{\sqrt{I_{sam}(x,y)}}{I_{0,sam} T_{rel}} \right)^2}_{\text{1. Sample Poisson counting}} + \underbrace{\left( K_{std} \frac{I_{sam}(x,y)}{I_{0,sam}} \frac{\sigma_{T_{rel}}}{T_{rel}^2} \right)^2}_{\text{2. Relative transmission error}} + \underbrace{\left( K_{std} \frac{I_{sam}(x,y)}{T_{rel}} \frac{\sigma_{I_{0,sam}}}{I_{0,sam}^2} \right)^2}_{\text{3. Sample monitor fluctuation}} + \underbrace{\left( \sigma_{K_{std}} \frac{I_{sam}(x,y)}{I_{0,sam} T_{rel}} \right)^2}_{\text{4. Standard scale (sample)}} + \underbrace{\left( K_{std} \frac{\sqrt{I_{bkg}(x,y)}}{I_{0,bkg}} \right)^2}_{\text{5. Background Poisson counting}} + \underbrace{\left( K_{std} I_{bkg}(x,y) \frac{\sigma_{I_{0,bkg}}}{I_{0,bkg}^2} \right)^2}_{\text{6. Background monitor fluctuation}} + \underbrace{\left( \sigma_{K_{std}} \frac{I_{bkg}(x,y)}{I_{0,bkg}} \right)^2}_{\text{7. Standard scale (bkg)}}$$
+        <div class="math-title">Analytical variance propagation formulation (Spiger integrator20.py)</div>
+        $$\text{1D Propagated Variance: } \sigma_{sub}^2(q) = K_{std}^2 \left[ \sigma_{sam,norm}^2(q) + \sigma_{bkg,norm}^2(q) \right] + \sigma_{K_{std}}^2 \left[ I_{sam,norm}(q) - I_{bkg,norm}(q) \right]^2$$
+        $$\sigma_{sam,norm}^2(q) = \underbrace{\left( \frac{\sigma_{sam}(q)}{I_{0,sam} T_{rel}} \right)^2}_{\text{Sample Poisson counting}} + \underbrace{\left( \frac{I_{sam}(q) \sigma_{T_{rel}}}{I_{0,sam} T_{rel}^2} \right)^2}_{\text{Relative transmission error}} + \underbrace{\left( \frac{I_{sam}(q) \sigma_{I_{0,sam}}}{T_{rel} I_{0,sam}^2} \right)^2}_{\text{Sample monitor fluctuation}}$$
+        $$\sigma_{bkg,norm}^2(q) = \underbrace{\left( \frac{\sigma_{bkg}(q)}{I_{0,bkg}} \right)^2}_{\text{Background Poisson counting}} + \underbrace{\left( \frac{I_{bkg}(q) \sigma_{I_{0,bkg}}}{I_{0,bkg}^2} \right)^2}_{\text{Background monitor fluctuation}}$$
       </div>
 
       <div style="margin-top: 1.25rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); padding: 1rem;">
@@ -766,7 +913,7 @@
       </div>
 
       <p style="color: var(--text-secondary); margin-bottom: 0.85rem;">
-        Radial averaging across 2,150 $q$-bins from $q_{min} = 0.095\text{ nm}^{-1}$ to $q_{max} = 42.06\text{ nm}^{-1}$ yields the differential scattering cross-section $\frac{d\Sigma}{d\Omega}(q)$ in absolute units ($\text{cm}^{-1}$) with propagated 1D standard error $\sigma_I(q)$.
+        Radial averaging across 2,150 $q$-bins from $q_{min} = 0.089\text{ nm}^{-1}$ to $q_{max} = 42.08\text{ nm}^{-1}$ directly on raw detector frames yields the sample profile $I_{sam}(q)$ and background profile $I_{bkg}(q)$. Subsequent 1D normalization and buffer subtraction produce the calibrated differential scattering cross-section $\frac{d\Sigma}{d\Omega}(q)$ in absolute units ($\text{cm}^{-1}$) with rigorous 1D propagated standard error $\sigma_I(q)$.
       </p>
 
       <div class="figure-card">
@@ -776,7 +923,7 @@
         <div class="figure-body">
           <p class="figure-caption">
             <strong>Figure 6 | Calibrated 1D SAXS profiles with uncertainty propagation.</strong> 
-            <strong>Top:</strong> 1D radial profiles for full isotropic integration ($0-360^\circ$, blue) with shaded $\pm 1\sigma_I$ uncertainty ribbon, meridian sector ($45-135^\circ$, orange dashed), and equatorial sector ($-45-45^\circ$, green dotted).
+            <strong>Top:</strong> 1D radial scattering curves: Measured total intensity $I_{meas}(q)$ (sample in capillary, light blue dotted), capillary background $I_{bkg}(q)$ (Scan #63, orange dashed), and net radial profile $I_{sub}(q) = I_{meas} - I_{bkg}$ ($0-360^\circ$, blue solid) with shaded $\pm 1\sigma_I$ uncertainty ribbon, Spiger benchmark overlay ($I_{ref}$, black dash-dot), meridian sector ($45-135^\circ$, orange dashed), and equatorial sector ($-45-45^\circ$, green dotted).
             <strong>Middle:</strong> Residual difference against Spiger benchmark <span class="code-span">Iq_000166</span> (black curve) bounded within the shaded $\pm 1\sigma$ uncertainty envelope (mean residual $< 0.02\text{ cm}^{-1}$).
             <strong>Bottom:</strong> Relative percentage uncertainty $\frac{\sigma_I(q)}{|I(q)|} \times 100\%$ (purple curve). Across the primary SAXS regime ($0.15 \le q \le 30\text{ nm}^{-1}$), relative errors remain below the 5% threshold line (green dotted).
           </p>
@@ -784,10 +931,10 @@
       </div>
 
       <div class="math-block">
-        <div class="math-title">Azimuthal radial averaging and bin variance aggregation</div>
-        $$I(q_k) = \frac{\sum_{i \in \text{bin } k} w_i \cdot I_{sub}(x_i, y_i)}{\sum_{i \in \text{bin } k} w_i}, \quad \text{where } w_i = [1 - M(x_i, y_i)] \cdot \Omega(x_i, y_i)$$
-        $$\sigma^2(I(q_k)) = \frac{\sum_{i \in \text{bin } k} w_i^2 \cdot \sigma_{sub}^2(x_i, y_i)}{\left( \sum_{i \in \text{bin } k} w_i \right)^2}$$
-        $$\text{Relative uncertainty: } \frac{\sigma_I(q_k)}{I(q_k)} \propto \frac{1}{\sqrt{N_{\text{pixels}}(q_k) \cdot \langle I_{\text{phot}} \rangle_{q_k}}}$$
+        <div class="math-title">Azimuthal radial averaging and 1D subtraction formulation</div>
+        $$I_{raw}(q_k) = \frac{\sum_{i \in \text{bin } k} w_i \cdot I_{raw}(x_i, y_i)}{\sum_{i \in \text{bin } k} w_i}, \quad \sigma_{raw}^2(q_k) = \frac{\sum_{i \in \text{bin } k} w_i^2 \cdot I_{raw}(x_i, y_i)}{\left( \sum_{i \in \text{bin } k} w_i \right)^2}$$
+        $$\text{1D Buffer Subtraction: } I_{sub}(q_k) = K_{std} \cdot \left[ \frac{I_{raw,sam}(q_k)}{I_{0,sam} \cdot T_{rel}} - \frac{I_{raw,bkg}(q_k)}{I_{0,bkg}} \right]$$
+        $$\sigma_{sub}^2(q_k) = K_{std}^2 \left[ \sigma_{norm,sam}^2(q_k) + \sigma_{norm,bkg}^2(q_k) \right] + \sigma_{K_{std}}^2 \left[ I_{norm,sam}(q_k) - I_{norm,bkg}(q_k) \right]^2$$
       </div>
     </section>
 
@@ -913,10 +1060,22 @@
               <td>Monitor flux normalization ($I / I_0$)</td>
             </tr>
             <tr>
+              <td><span class="code-span">step4_capillary_subtraction_1d.png</span></td>
+              <td>PNG / PDF</td>
+              <td>300 DPI / Vector</td>
+              <td>Quantitative 1D capillary background subtraction, fraction %, and SBR</td>
+            </tr>
+            <tr>
+              <td><span class="code-span">step4c_empty_beamline_background.png</span></td>
+              <td>PNG / PDF</td>
+              <td>300 DPI / Vector</td>
+              <td>Empty beamline background comparison, air scatter decomposition, and double-subtraction avoidance</td>
+            </tr>
+            <tr>
               <td><span class="code-span">step4_background_subtraction_2d.png</span></td>
               <td>PNG / PDF</td>
               <td>300 DPI / Vector</td>
-              <td>Transmission attenuation correction and 2D subtraction</td>
+              <td>Transmission attenuation correction and 2D subtraction (diagnostic)</td>
             </tr>
             <tr>
               <td><span class="code-span">step4b_uncertainty_and_snr_2d.png</span></td>

@@ -71,38 +71,42 @@ $$M(x, y) = M_{\text{beamstop}}(x, y) \cup \mathcal{D}_2[M_{\text{gaps}}(x, y)] 
 The resulting mask is saved in [`calibration/Start_rigorous_mask.tiff`](file:///run/media/tomek/data/Mrc_26/saxs_publication_project/calibration/Start_rigorous_mask.tiff).
 
 
-### 2. Monitor Flux Normalization & Transmission Correction
+### 2. Monitor flux normalization and transmission correction (pulse pileup physics)
 Incident photon flux fluctuations are scaled using the Keithley ion chamber counter $I_0$. Transmission factors $T$ and relative sample transmission $T_{\text{rel}}$ are computed from transmitted beam diode readings ($\text{roi3}$):
 $$T_{\text{sample}} = \frac{\text{roi3}_{\text{sample}} \cdot t_{\text{sec}}}{\text{ltime} \cdot I_{0, \text{sample}}}, \quad T_{\text{rel}} = \frac{T_{\text{sample}}}{T_{\text{bkg}}}$$
 $$\sigma_{T_{\text{rel}}} = T_{\text{rel}} \sqrt{\left(\frac{\sigma_{T, \text{sam}}}{T_{\text{sam}}}\right)^2 + \left(\frac{\sigma_{T, \text{bkg}}}{T_{\text{bkg}}}\right)^2}, \quad \frac{\sigma_T}{T} = \sqrt{\frac{1}{\text{roi3}} + 0.02^2}$$
 
-### 3. Net Background-Subtracted Calibrated Intensity
-$$I_{\text{sub}}(x, y) = K_{\text{std}} \left[ \frac{I_{\text{sample}}(x, y)}{I_{0, \text{sample}} \cdot T_{\text{rel}}} - \frac{I_{\text{bkg}}(x, y)}{I_{0, \text{bkg}}} \right]$$
+> **Detector physics: ROI3 livetime and pulse pileup correction**  
+> $\text{roi3}$ is the integrated intensity of the transmitted beam measured by an energy-dispersive XRF detector / multi-channel analyzer (MCA). At high photon count rates, incoming pulses overlap within the electronic shaping time (pulse pileup), rendering the hardware temporarily dead ($t_{\text{dead}} = t_{\text{sec}} - t_{\text{live}}$). In our beamtime, Scan #184 had $26.68\%$ dead time ($t_{\text{live}} = 7.33\text{ s}$ out of $10\text{ s}$), whereas Background #63 had $37.50\%$ dead time ($t_{\text{live}} = 9.37\text{ s}$ out of $15\text{ s}$) due to higher transmitted flux through the empty capillary. Dividing by $t_{\text{live}}$ ($\text{Rate}_{\text{ROI3}} = \text{roi3} / t_{\text{live}}$) recovers the true incoming photon rate independent of whether the system counted for longer or shorter effective time due to pileup.
 
-### 4. 7-Component Analytical Pixel-Level Variance Propagation
-The pixel variance $\sigma^2(x, y)$ explicitly propagates seven independent random and systematic error sources:
-$$\sigma^2(x, y) = \text{Term}_1 + \text{Term}_2 + \text{Term}_3 + \text{Term}_4 + \text{Term}_5 + \text{Term}_6 + \text{Term}_7$$
 
-1. **Sample Poisson photon counting noise**:
-   $$\text{Term}_1 = \left( \frac{K_{\text{std}} \sqrt{I_{\text{sample}}}}{I_{0, \text{sample}} \cdot T_{\text{rel}}} \right)^2$$
-2. **Relative transmission uncertainty**:
-   $$\text{Term}_2 = \left( \frac{K_{\text{std}} \cdot I_{\text{sample}}}{I_{0, \text{sample}}} \frac{\sigma_{T_{\text{rel}}}}{T_{\text{rel}}^2} \right)^2$$
-3. **Sample beam monitor flux fluctuation ($2\%$ error)**:
-   $$\text{Term}_3 = \left( \frac{K_{\text{std}} \cdot I_{\text{sample}}}{T_{\text{rel}}} \frac{\sigma_{I_{0, \text{sam}}}}{I_{0, \text{sample}}^2} \right)^2$$
-4. **Glassy carbon standard factor calibration uncertainty on sample**:
-   $$\text{Term}_4 = \left( \frac{\sigma_{K_{\text{std}}} \cdot I_{\text{sample}}}{I_{0, \text{sample}} \cdot T_{\text{rel}}} \right)^2$$
-5. **Background buffer Poisson photon counting noise**:
-   $$\text{Term}_5 = \left( \frac{K_{\text{std}} \sqrt{I_{\text{bkg}}}}{I_{0, \text{bkg}}} \right)^2$$
-6. **Background beam monitor flux fluctuation ($2\%$ error)**:
-   $$\text{Term}_6 = \left( \frac{K_{\text{std}} \cdot I_{\text{bkg}} \cdot \sigma_{I_{0, \text{bkg}}}}{I_{0, \text{bkg}}^2} \right)^2$$
-7. **Glassy carbon standard factor calibration uncertainty on background**:
-   $$\text{Term}_7 = \left( \frac{\sigma_{K_{\text{std}}} \cdot I_{\text{bkg}}}{I_{0, \text{bkg}}} \right)^2$$
+### 3. Quantitative reduction: 1D subtraction preceded by integration
+Azimuthal radial integration is executed directly on the masked raw 2D detector patterns before subtraction, preserving pure Poisson counting statistics ($\sigma = \sqrt{I}$) and avoiding negative-count artifacts in radial binning:
+$$I_{\text{sam}}(q) = \text{integrate1d}(I_{\text{sample,raw}}), \quad I_{\text{bkg}}(q) = \text{integrate1d}(I_{\text{bkg,raw}})$$
+Profiles are subsequently normalized by monitor and relative transmission in 1D, and subtracted:
+$$I_{\text{sam,norm}}(q) = \frac{I_{\text{sam}}(q)}{I_{0, \text{sample}} \cdot T_{\text{rel}}}, \quad I_{\text{bkg,norm}}(q) = \frac{I_{\text{bkg}}(q)}{I_{0, \text{bkg}}}$$
+$$I_{\text{sub}}(q) = K_{\text{std}} \left[ I_{\text{sam,norm}}(q) - I_{\text{bkg,norm}}(q) \right]$$
+where $K_{\text{std}} = 385.2002\ \mathrm{cm}^{-1}$ is the glassy carbon standard factor for absolute intensity calibration. (2D subtracted frames $I_{\text{sub}}(x, y)$ are generated strictly for qualitative visual verification of parasitic scatter removal).
 
-### 5. Azimuthal Integration & Cake Transformation
+#### Empty beamline background protocol
+The empty beamline background (air and instrument parasitic scatter without a capillary, Scan #47 `AirGlassy_000047`) is **inherently accounted for within the capillary buffer background** (Scan #63 `CapillaryTop`). The capillary sits directly in the beamline path and captures both borosilicate glass scatter and transmitted empty beamline air scatter: $I_{\text{cap}}(q) = I_{\text{glass}}(q) + T_{\text{cap}} I_{\text{air}}(q)$. Therefore, subtracting the capillary background inherently removes the empty beamline background. Subtracting the empty beamline background a second time would cause unphysical negative intensities at intermediate $q$ (double-subtraction error).
+
+
+### 4. Propagated uncertainty analysis
+#### 1D analytical variance propagation (Spiger `integrator20.py`):
+$$\sigma_{\text{sub}}^2(q) = K_{\text{std}}^2 \left[ \sigma_{\text{sam,norm}}^2(q) + \sigma_{\text{bkg,norm}}^2(q) \right] + \sigma_{K_{\text{std}}}^2 \left[ I_{\text{sam,norm}}(q) - I_{\text{bkg,norm}}(q) \right]^2$$
+$$\sigma_{\text{sam,norm}}^2(q) = \underbrace{\left( \frac{\sigma_{\text{sam}}(q)}{I_{0, \text{sam}} T_{\text{rel}}} \right)^2}_{\text{Sample Poisson counting}} + \underbrace{\left( \frac{I_{\text{sam}}(q) \sigma_{T_{\text{rel}}}}{I_{0, \text{sam}} T_{\text{rel}}^2} \right)^2}_{\text{Relative transmission error}} + \underbrace{\left( \frac{I_{\text{sam}}(q) \sigma_{I_{0, \text{sam}}}}{T_{\text{rel}} I_{0, \text{sam}}^2} \right)^2}_{\text{Sample monitor fluctuation}}$$
+$$\sigma_{\text{bkg,norm}}^2(q) = \underbrace{\left( \frac{\sigma_{\text{bkg}}(q)}{I_{0, \text{bkg}}} \right)^2}_{\text{Background Poisson counting}} + \underbrace{\left( \frac{I_{\text{bkg}}(q) \sigma_{I_{0, \text{bkg}}}}{I_{0, \text{bkg}}^2} \right)^2}_{\text{Background monitor fluctuation}}$$
+
+#### 2D spatial uncertainty and SNR mapping (diagnostic):
+The pixel variance $\sigma^2(x, y)$ propagates seven independent components across the detector face for spatial diagnostic inspection and pixel signal-to-noise mapping ($\text{SNR}(x, y) = |I_{\text{sub}}(x, y)| / \sigma(x, y)$).
+
+
+### 5. Azimuthal Integration, Sector Slicing & Cake Transformation
 Using `pyFAI` CSR Cython algorithms with solid-angle and polarization corrections:
-- **1D Profile**: Azimuthal integration over $0^\circ \le \phi \le 360^\circ$ into $q = \frac{4\pi}{\lambda}\sin\theta$ ($2,150$ radial bins from $0.09\ \mathrm{nm}^{-1}$ to $42.0\ \mathrm{nm}^{-1}$).
-- **Azimuthal Sectors**: Meridian ($45^\circ \le \phi \le 135^\circ$) and Equatorial ($-45^\circ \le \phi \le 45^\circ$).
-- **2D Caking**: Transformation to $I(q, \chi)$ ($400$ radial $\times 360$ azimuthal bins).
+- **1D Profile**: Azimuthal integration over $0^\circ \le \phi \le 360^\circ$ into $q = \frac{4\pi}{\lambda}\sin\theta$ ($2,150$ radial bins from $0.089\ \mathrm{nm}^{-1}$ to $42.08\ \mathrm{nm}^{-1}$).
+- **Azimuthal Sectors**: Meridian ($45^\circ \le \phi \le 135^\circ$) and Equatorial ($-45^\circ \le \phi \le 45^\circ$), integrated independently for sample and background before subtraction.
+- **2D Caking**: Transformation to $I(q, \chi)$ ($400$ radial $\times 360$ azimuthal bins), integrated independently and subtracted.
 
 ---
 

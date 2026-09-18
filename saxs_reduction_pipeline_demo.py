@@ -263,11 +263,24 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
     if row_bkg is None:
         raise ValueError(f"Could not find background scan #{bkg_scan} in SPEC data!")
 
-    # Extract sample metadata
+    # -------------------------------------------------------------------------
+    # Transmission Extraction & ROI3 Livetime Correction (Pulse Pileup Physics)
+    # -------------------------------------------------------------------------
+    # ROI3 is the integrated intensity of the transmitted beam measured by the MCA.
+    # Due to high count rates, incoming photons can arrive within the shaping time
+    # of the detector electronics, causing pulse pileup and dead-time losses.
+    # The detector hardware timer measures both the real clock time (Seconds) and
+    # the live counting time (ltime). High pileup reduces ltime (ltime < Seconds).
+    # To recover the true incoming count rate independent of pileup dead time:
+    #   Rate_ROI3 = roi3 / ltime
+    # Scaled to the measurement duration (Seconds) and normalized to monitor (IoniCh):
+    #   T = (roi3 / ltime * Seconds) / IoniCh
+    # Relative transmission is then T_rel = T_sample / T_bkg.
     sec_d = float(row_sample[motors['Seconds']])
     i0_d = float(row_sample[motors['IoniCh']])
     roi3_d = float(row_sample[motors['roi3']])
     ltime_d = float(row_sample[motors['ltime']])
+    deadtime_d = (sec_d - ltime_d) / sec_d
     trans_d = (roi3_d / ltime_d * sec_d) / i0_d
     trans_err_d = trans_d * np.sqrt(1.0 / roi3_d + 0.02**2)
 
@@ -276,6 +289,7 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
     i0_b = float(row_bkg[motors['IoniCh']])
     roi3_b = float(row_bkg[motors['roi3']])
     ltime_b = float(row_bkg[motors['ltime']])
+    deadtime_b = (sec_b - ltime_b) / sec_b
     trans_b = (roi3_b / ltime_b * sec_b) / i0_b
     trans_err_b = trans_b * np.sqrt(1.0 / roi3_b + 0.02**2)
 
@@ -283,8 +297,8 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
     t_rel = trans_d / trans_b
     t_rel_err = t_rel * np.sqrt((trans_err_d / trans_d)**2 + (trans_err_b / trans_b)**2)
 
-    print(f"  Sample #{scan_num}: Sec={sec_d:.1f}s, IoniCh={i0_d:.0f}, Trans={trans_d:.5f} ± {trans_err_d:.5f}")
-    print(f"  Bkg #{bkg_scan}: Sec={sec_b:.1f}s, IoniCh={i0_b:.0f}, Trans={trans_b:.5f} ± {trans_err_b:.5f}")
+    print(f"  Sample #{scan_num}: Sec={sec_d:.1f}s, LTime={ltime_d:.2f}s (DeadTime={deadtime_d*100:.2f}%), IoniCh={i0_d:.0f}, Trans={trans_d:.5f} ± {trans_err_d:.5f}")
+    print(f"  Bkg #{bkg_scan}: Sec={sec_b:.1f}s, LTime={ltime_b:.2f}s (DeadTime={deadtime_b*100:.2f}%), IoniCh={i0_b:.0f}, Trans={trans_b:.5f} ± {trans_err_b:.5f}")
     print(f"  Relative Transmission T_rel = {t_rel:.5f} ± {t_rel_err:.5f}")
 
     # File paths
@@ -303,18 +317,99 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
         save_path=rigorous_mask_path
     )
 
-    # Spiger mathematical reduction:
+    # -------------------------------------------------------------------------
+    # Quantitative Reduction Methodology: Integrate First, Then Subtract
+    # (Per Ernesto Scoppola: "I_sub is not done pixel-wise; we integrate data
+    #  and background, and then we subtract.")
+    # -------------------------------------------------------------------------
+    print("  Azimuthal integration of raw sample and background frames independently...")
+    int_sample = ai.integrate1d(img_sample_raw, npt=2150, correctSolidAngle=True, unit='q_nm^-1',
+                                mask=mask_full, error_model="poisson", method=('full', 'CSR', 'cython'))
+    int_bkg = ai.integrate1d(img_bkg_raw, npt=2150, correctSolidAngle=True, unit='q_nm^-1',
+                             mask=mask_full, error_model="poisson", method=('full', 'CSR', 'cython'))
+    q_all = int_sample.radial
+    i_sam_raw_1d = int_sample.intensity
+    sigma_sam_raw_1d = int_sample.sigma if int_sample.sigma is not None else np.sqrt(np.maximum(i_sam_raw_1d, 0))
+    i_bkg_raw_1d = int_bkg.intensity
+    sigma_bkg_raw_1d = int_bkg.sigma if int_bkg.sigma is not None else np.sqrt(np.maximum(i_bkg_raw_1d, 0))
+
+    # Benchmark comparison against Spiger saved profile (Iq_000166)
+    with h5py.File(REDUCED_EXP2_1, 'r') as h5_ref:
+        ref_profile = h5_ref['Iq_000166/profile'][:]
+        q_ref = ref_profile[:, 0]
+        i_ref = ref_profile[:, 1]
+        sigma_ref = ref_profile[:, 2]     # Propagated 1D uncertainty
+        dq_ref = ref_profile[:, 3]        # Resolution / q-smearing
+
+    # Sector Integrations (Sample & Background independently)
+    int_sam_meridian = ai.integrate1d(img_sample_raw, npt=2150, correctSolidAngle=True, unit='q_nm^-1',
+                                      mask=mask_full, azimuth_range=(45, 135), error_model="poisson", method=('full', 'CSR', 'cython'))
+    int_bkg_meridian = ai.integrate1d(img_bkg_raw, npt=2150, correctSolidAngle=True, unit='q_nm^-1',
+                                      mask=mask_full, azimuth_range=(45, 135), error_model="poisson", method=('full', 'CSR', 'cython'))
+    q_meridian = int_sam_meridian.radial
+
+    int_sam_equatorial = ai.integrate1d(img_sample_raw, npt=2150, correctSolidAngle=True, unit='q_nm^-1',
+                                        mask=mask_full, azimuth_range=(-45, 45), error_model="poisson", method=('full', 'CSR', 'cython'))
+    int_bkg_equatorial = ai.integrate1d(img_bkg_raw, npt=2150, correctSolidAngle=True, unit='q_nm^-1',
+                                        mask=mask_full, azimuth_range=(-45, 45), error_model="poisson", method=('full', 'CSR', 'cython'))
+    q_equatorial = int_sam_equatorial.radial
+
+    # 2D Cake transformation (Sample & Background independently)
+    cake_sam = ai.integrate2d(img_sample_raw, npt_rad=400, npt_azim=360, correctSolidAngle=True,
+                              unit='q_nm^-1', mask=mask_full, method=('full', 'CSR', 'cython'))
+    cake_bkg = ai.integrate2d(img_bkg_raw, npt_rad=400, npt_azim=360, correctSolidAngle=True,
+                              unit='q_nm^-1', mask=mask_full, method=('full', 'CSR', 'cython'))
+    q_cake, chi_cake = cake_sam.radial, cake_sam.azimuthal
+
+    # -------------------------------------------------------------------------
+    # 1D Normalization, Subtraction & Analytical Uncertainty Propagation
+    # -------------------------------------------------------------------------
+    # 1D Normalization:
+    #   I_sam_norm = I_sample / (I0_sam * T_rel)
+    #   I_bkg_norm = I_bkg / I0_bkg
+    i_sam_norm = i_sam_raw_1d / (i0_d * t_rel)
+    i_bkg_norm = i_bkg_raw_1d / i0_b
+
+    # 1D Subtraction & absolute scaling (K_std):
+    #   I_sub(q) = K_std * [ I_sam_norm(q) - I_bkg_norm(q) ]
+    i_sam_scaled = K_std * i_sam_norm
+    i_bkg_scaled = K_std * i_bkg_norm
+    i_all = K_std * (i_sam_norm - i_bkg_norm)
+
+    # 1D Analytical Variance Propagation (Spiger integrator20.py lines 482-504):
+    i0_err_d = i0_d * 0.02
+    i0_err_b = i0_b * 0.02
+    var_sam_norm = (
+        (sigma_sam_raw_1d / (i0_d * t_rel)) ** 2 +
+        (i_sam_raw_1d / i0_d * t_rel_err / (t_rel ** 2)) ** 2 +
+        (i_sam_raw_1d / t_rel * i0_err_d / (i0_d ** 2)) ** 2
+    )
+    var_bkg_norm = (
+        (sigma_bkg_raw_1d / i0_b) ** 2 +
+        (i_bkg_raw_1d * i0_err_b / (i0_b ** 2)) ** 2
+    )
+    sigma_sub_1d = np.sqrt(
+        (K_std ** 2) * (var_sam_norm + var_bkg_norm) +
+        (K_std_err ** 2) * ((i_sam_norm - i_bkg_norm) ** 2)
+    )
+
+    # Sector 1D subtractions:
+    i_meridian = K_std * (int_sam_meridian.intensity / (i0_d * t_rel) - int_bkg_meridian.intensity / i0_b)
+    i_equatorial = K_std * (int_sam_equatorial.intensity / (i0_d * t_rel) - int_bkg_equatorial.intensity / i0_b)
+
+    # 2D Cake subtraction:
+    img_cake = K_std * (cake_sam.intensity / (i0_d * t_rel) - cake_bkg.intensity / i0_b)
+
+    # -------------------------------------------------------------------------
+    # Diagnostic 2D Spatial Maps (Pattern Inspection & Spatial Uncertainty)
+    # -------------------------------------------------------------------------
     img_sample_norm = img_sample_raw / i0_d
     img_bkg_norm = img_bkg_raw / i0_b
-
-    # Subtraction with transmission scaling & absolute standard factor:
-    # I_sub = K_std * [ I_sample / (i0_d * t_rel) - I_bkg / i0_b ]
     img_sub_2d = K_std * (img_sample_raw / (i0_d * t_rel) - img_bkg_raw / i0_b)
     img_sub_2d_masked = img_sub_2d.copy()
     img_sub_2d_masked[mask_full] = np.nan
 
-    # Compute 2D analytical uncertainty map
-    print("  Calculating analytical 2D error propagation map...")
+    print("  Calculating diagnostic 2D spatial uncertainty map...")
     sigma_2d, err_terms = compute_2d_uncertainty(
         img_sample_raw, img_bkg_raw, i0_d, i0_b, t_rel, t_rel_err, K_std, K_std_err
     )
@@ -325,33 +420,6 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
     snr_2d = np.abs(img_sub_2d) / np.maximum(sigma_2d, 1e-9)
     snr_2d_masked = snr_2d.copy()
     snr_2d_masked[mask_full] = np.nan
-
-    # Azimuthal Radial Integrations (with exact Poisson error propagation)
-    print("  Integrating 1D profiles and 2D Cake...")
-    int_all = ai.integrate1d(img_sub_2d, npt=2150, correctSolidAngle=True, unit='q_nm^-1',
-                             mask=mask_full, error_model="poisson", method=('full', 'CSR', 'cython'))
-    q_all, i_all = int_all.radial, int_all.intensity
-
-    # Benchmark comparison against Spiger saved profile (Iq_000166)
-    with h5py.File(REDUCED_EXP2_1, 'r') as h5_ref:
-        ref_profile = h5_ref['Iq_000166/profile'][:]
-        q_ref = ref_profile[:, 0]
-        i_ref = ref_profile[:, 1]
-        sigma_ref = ref_profile[:, 2]     # Propagated 1D uncertainty
-        dq_ref = ref_profile[:, 3]        # Resolution / q-smearing
-
-    int_meridian = ai.integrate1d(img_sub_2d, npt=2150, correctSolidAngle=True, unit='q_nm^-1',
-                                  mask=mask_full, azimuth_range=(45, 135), method=('full', 'CSR', 'cython'))
-    q_meridian, i_meridian = int_meridian.radial, int_meridian.intensity
-
-    int_equatorial = ai.integrate1d(img_sub_2d, npt=2150, correctSolidAngle=True, unit='q_nm^-1',
-                                    mask=mask_full, azimuth_range=(-45, 45), method=('full', 'CSR', 'cython'))
-    q_equatorial, i_equatorial = int_equatorial.radial, int_equatorial.intensity
-
-    # 2D Cake transformation
-    cake_res = ai.integrate2d(img_sub_2d, npt_rad=400, npt_azim=360, correctSolidAngle=True,
-                              unit='q_nm^-1', mask=mask_full, method=('full', 'CSR', 'cython'))
-    q_cake, chi_cake, img_cake = cake_res.radial, cake_res.azimuthal, cake_res.intensity
 
     # Direct beam center
     xcen = ai.poni2 / ai.pixel2
@@ -481,11 +549,11 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
     cmap_cw.set_bad('#111827')
     im_sub = axes[2].imshow(img_sub_2d_masked, origin='lower', cmap=cmap_cw, 
                            norm=SymLogNorm(linthresh=0.01, linscale=1.0, vmin=-0.2, vmax=5.0))
-    axes[2].set_title(r"$\mathbf{(c)}$ Net Sample 2D Pattern ($I_{sub}$)", pad=10)
+    axes[2].set_title(r"$\mathbf{(c)}$ Net 2D Differential Pattern (Diagnostic)", pad=10)
     axes[2].set_xlabel("Detector Pixel X")
     axes[2].set_ylabel("Detector Pixel Y")
     cb_sub = fig.colorbar(im_sub, ax=axes[2], fraction=0.046, pad=0.04)
-    cb_sub.set_label(r"Absolute Cross-Section $[\mathrm{cm}^{-1}]$")
+    cb_sub.set_label(r"Differential Cross-Section $[\mathrm{cm}^{-1}]$")
     plt.tight_layout()
     fig.savefig(os.path.join(OUTPUT_DIR, "step4_background_subtraction_2d.png"), dpi=300)
     fig.savefig(os.path.join(OUTPUT_DIR, "step4_background_subtraction_2d.pdf"))
@@ -520,6 +588,92 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
     fig.savefig(os.path.join(OUTPUT_DIR, "step4b_uncertainty_and_snr_2d.pdf"))
     plt.close(fig)
 
+    # Step 4c: Quantitative 1D Capillary Background Subtraction Decomposition
+    print("  Generating Fig 4c: Quantitative 1D Capillary Background Subtraction...")
+    f_bkg_perc = (i_bkg_scaled / np.maximum(i_sam_scaled, 1e-9)) * 100.0
+    sbr = i_all / np.maximum(i_bkg_scaled, 1e-9)
+
+    fig_sub1d = plt.figure(figsize=(14, 10))
+    gs_sub = gridspec.GridSpec(2, 2, figure=fig_sub1d, hspace=0.28, wspace=0.25)
+    ax_sub1 = fig_sub1d.add_subplot(gs_sub[0, 0])
+    ax_sub2 = fig_sub1d.add_subplot(gs_sub[0, 1])
+    ax_sub3 = fig_sub1d.add_subplot(gs_sub[1, 0])
+    ax_sub4 = fig_sub1d.add_subplot(gs_sub[1, 1])
+
+    # Panel 1: Full-range 1D subtraction overlay
+    ax_sub1.plot(q_all, i_sam_scaled, color='#1d4ed8', linewidth=2.0, label=r'Measured $I_{\mathrm{meas}}(q) = K_{\mathrm{std}}\frac{I_{\mathrm{sam}}}{I_0 T_{\mathrm{rel}}}$ (Total)')
+    ax_sub1.plot(q_all, i_bkg_scaled, color='#dc2626', linewidth=1.8, linestyle='--', label=r'Capillary $I_{\mathrm{bkg}}(q) = K_{\mathrm{std}}\frac{I_{\mathrm{bkg}}}{I_{0,\mathrm{bkg}}}$ (Scan #63)')
+    ax_sub1.plot(q_all, i_all, color='#059669', linewidth=2.2, label=r'Net Subtracted $I_{\mathrm{sub}}(q) = I_{\mathrm{meas}} - I_{\mathrm{bkg}}$')
+    ax_sub1.fill_between(q_all, i_all - sigma_sub_1d, i_all + sigma_sub_1d, color='#059669', alpha=0.25, label=r'Propagated Uncertainty ($\pm 1\sigma_I$)')
+    ax_sub1.fill_between(q_all, i_bkg_scaled, i_sam_scaled, where=(i_sam_scaled >= i_bkg_scaled), color='#93c5fd', alpha=0.28, label=r'Subtracted Signal Area ($\Delta I$)')
+
+    ax_sub1.set_xscale('log')
+    ax_sub1.set_yscale('log')
+    ax_sub1.set_xlim(0.09, 42.0)
+    ax_sub1.set_ylim(1e-2, 35.0)
+    ax_sub1.set_title(r"$\mathbf{(a)}$ Full 1D scattering decomposition ($I_{\mathrm{meas}} - I_{\mathrm{bkg}} \rightarrow I_{\mathrm{sub}}$)", pad=9, fontsize=12)
+    ax_sub1.set_xlabel(r"Scattering Vector $q = \frac{4\pi}{\lambda}\sin\theta\ [\mathrm{nm}^{-1}]$", fontsize=11)
+    ax_sub1.set_ylabel(r"Cross-Section $\frac{d\Sigma}{d\Omega}(q)\ [\mathrm{cm}^{-1}]$", fontsize=11)
+    ax_sub1.grid(True, which='both', ls='-', alpha=0.2)
+    ax_sub1.legend(loc='upper right', framealpha=0.92, fontsize=8.5)
+
+    ax_sub1.annotate(r'$\mathbf{Sample\ Dominance}$' + '\n' + r'$I_{\mathrm{meas}} \gg I_{\mathrm{bkg}}$',
+                     xy=(0.18, 1.8), xytext=(0.11, 0.08),
+                     arrowprops=dict(arrowstyle="->", color='#1d4ed8', lw=1.3),
+                     bbox=dict(boxstyle="round,pad=0.25", fc="#eff6ff", ec="#1d4ed8", alpha=0.9), fontsize=8.5)
+
+    # Panel 2: Intermediate-to-high q zoom (linear y-axis)
+    ax_sub2.plot(q_all, i_sam_scaled, color='#1d4ed8', linewidth=1.8, label=r'Measured $I_{\mathrm{meas}}(q)$')
+    ax_sub2.plot(q_all, i_bkg_scaled, color='#dc2626', linewidth=1.8, linestyle='--', label=r'Capillary $I_{\mathrm{bkg}}(q)$')
+    ax_sub2.plot(q_all, i_all, color='#059669', linewidth=2.0, label=r'Net Subtracted $I_{\mathrm{sub}}(q)$')
+    ax_sub2.fill_between(q_all, i_all - sigma_sub_1d, i_all + sigma_sub_1d, color='#059669', alpha=0.25)
+    ax_sub2.fill_between(q_all, i_bkg_scaled, i_sam_scaled, where=(i_sam_scaled >= i_bkg_scaled), color='#93c5fd', alpha=0.28)
+
+    ax_sub2.set_xscale('log')
+    ax_sub2.set_xlim(0.8, 42.0)
+    ax_sub2.set_ylim(0.0, 0.6)
+    ax_sub2.set_title(r"$\mathbf{(b)}$ Intermediate and wide-angle range (linear cross-section)", pad=9, fontsize=12)
+    ax_sub2.set_xlabel(r"Scattering Vector $q\ [\mathrm{nm}^{-1}]$", fontsize=11)
+    ax_sub2.set_ylabel(r"Cross-Section $\frac{d\Sigma}{d\Omega}(q)\ [\mathrm{cm}^{-1}]$", fontsize=11)
+    ax_sub2.grid(True, which='both', ls='-', alpha=0.2)
+    ax_sub2.legend(loc='upper left', framealpha=0.92, fontsize=8.5)
+
+    ax_sub2.annotate(r'$\mathbf{Capillary\ Scatter\ Plateau}$' + '\n' + r'$I_{\mathrm{bkg}} \approx 85\%\ \mathrm{of}\ I_{\mathrm{meas}}$',
+                     xy=(2.0, 0.25), xytext=(2.2, 0.42),
+                     arrowprops=dict(arrowstyle="->", color='#dc2626', lw=1.3),
+                     bbox=dict(boxstyle="round,pad=0.25", fc="#fef2f2", ec="#dc2626", alpha=0.9), fontsize=8.5)
+
+    # Panel 3: Background Percentage Contribution
+    ax_sub3.plot(q_all, f_bkg_perc, color='#dc2626', linewidth=1.8)
+    ax_sub3.axhline(50.0, color='gray', linestyle=':', linewidth=1.0, label='50% Threshold')
+    ax_sub3.fill_between(q_all, 0, f_bkg_perc, color='#fca5a5', alpha=0.3)
+    ax_sub3.set_xscale('log')
+    ax_sub3.set_xlim(0.09, 42.0)
+    ax_sub3.set_ylim(0, 100.0)
+    ax_sub3.set_title(r"$\mathbf{(c)}$ Capillary background contribution fraction", pad=9, fontsize=12)
+    ax_sub3.set_xlabel(r"Scattering Vector $q\ [\mathrm{nm}^{-1}]$", fontsize=11)
+    ax_sub3.set_ylabel(r"$\frac{I_{\mathrm{bkg}}(q)}{I_{\mathrm{meas}}(q)} \times 100\ [\%]$", fontsize=11)
+    ax_sub3.grid(True, which='both', ls='-', alpha=0.2)
+    ax_sub3.legend(loc='upper left', framealpha=0.9, fontsize=8.5)
+
+    # Panel 4: Signal-to-Background Ratio (SBR)
+    ax_sub4.plot(q_all, sbr, color='#059669', linewidth=1.8, label=r'$\mathrm{SBR} = I_{\mathrm{sub}} / I_{\mathrm{bkg}}$')
+    ax_sub4.axhline(1.0, color='#dc2626', linestyle='--', linewidth=1.0, label=r'Equal Signal / Bkg ($\mathrm{SBR} = 1$)')
+    ax_sub4.set_xscale('log')
+    ax_sub4.set_yscale('log')
+    ax_sub4.set_xlim(0.09, 42.0)
+    ax_sub4.set_ylim(0.05, 50.0)
+    ax_sub4.set_title(r"$\mathbf{(d)}$ Signal-to-background ratio (SBR)", pad=9, fontsize=12)
+    ax_sub4.set_xlabel(r"Scattering Vector $q\ [\mathrm{nm}^{-1}]$", fontsize=11)
+    ax_sub4.set_ylabel(r"Ratio $\frac{I_{\mathrm{sub}}(q)}{I_{\mathrm{bkg}}(q)}$", fontsize=11)
+    ax_sub4.grid(True, which='both', ls='-', alpha=0.2)
+    ax_sub4.legend(loc='upper right', framealpha=0.9, fontsize=8.5)
+
+    plt.tight_layout()
+    fig_sub1d.savefig(os.path.join(OUTPUT_DIR, "step4_capillary_subtraction_1d.png"), dpi=300)
+    fig_sub1d.savefig(os.path.join(OUTPUT_DIR, "step4_capillary_subtraction_1d.pdf"))
+    plt.close(fig_sub1d)
+
     # Step 5: Azimuthal Cake Transformation
     fig, ax = plt.subplots(figsize=(10, 6))
     cake_disp = np.ma.masked_invalid(img_cake)
@@ -547,9 +701,12 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
                                                    gridspec_kw={'height_ratios': [3.0, 1.0, 1.2]})
 
     # Main plot: I(q) with 1-sigma uncertainty ribbon
-    ax_main.plot(q_ref, i_ref, color='#0072B2', linewidth=1.8, label=r'Complete Radial Average ($0^\circ - 360^\circ$)')
-    ax_main.fill_between(q_ref, i_ref - sigma_ref, i_ref + sigma_ref, color='#0072B2', alpha=0.25, 
-                         label=r'Propagated Uncertainty ($\pm 1\sigma_I$)')
+    ax_main.plot(q_all, i_sam_scaled, color='#56B4E9', linewidth=1.2, linestyle=':', alpha=0.8, label=r'Measured Total $I_{\mathrm{meas}}(q)$ (Sample + Capillary)')
+    ax_main.plot(q_all, i_bkg_scaled, color='#D55E00', linewidth=1.2, linestyle='--', alpha=0.8, label=r'Capillary Background $I_{\mathrm{bkg}}(q)$ (Scan #63)')
+    ax_main.plot(q_all, i_all, color='#0072B2', linewidth=1.8, label=r'Net Radial Profile ($I_{\mathrm{meas}} - I_{\mathrm{bkg}}$)')
+    ax_main.fill_between(q_all, i_all - sigma_sub_1d, i_all + sigma_sub_1d, color='#0072B2', alpha=0.25, 
+                         label=r'Propagated 1D Uncertainty ($\pm 1\sigma_I$)')
+    ax_main.plot(q_ref, i_ref, color='black', linewidth=1.0, linestyle='-.', alpha=0.7, label=r'Spiger Benchmark ($I_{ref}$)')
     ax_main.plot(q_meridian, i_meridian, color='#E69F00', linewidth=1.3, linestyle='--', label=r'Meridian Sector ($45^\circ - 135^\circ$)')
     ax_main.plot(q_equatorial, i_equatorial, color='#009E73', linewidth=1.3, linestyle=':', label=r'Equatorial Sector ($-45^\circ - 45^\circ$)')
 
@@ -562,10 +719,12 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
     ax_main.grid(True, which="both", ls="-", alpha=0.2)
     ax_main.legend(loc='lower left', framealpha=0.9)
 
-    # Residual against PyFAI integration
-    diff_val = i_all - i_ref
-    ax_diff.plot(q_all, diff_val, color='black', linewidth=1.0)
-    ax_diff.fill_between(q_all, -sigma_ref, sigma_ref, color='gray', alpha=0.15, label=r'$\pm 1\sigma$ Band')
+    # Residual against Spiger benchmark (interpolated to common q-grid)
+    i_ref_interp = np.interp(q_all, q_ref, i_ref)
+    sigma_ref_interp = np.interp(q_all, q_ref, sigma_ref)
+    diff_val = i_all - i_ref_interp
+    ax_diff.plot(q_all, diff_val, color='black', linewidth=1.0, label=r'Residual $(I_{1D} - I_{ref})$')
+    ax_diff.fill_between(q_all, -sigma_ref_interp, sigma_ref_interp, color='gray', alpha=0.15, label=r'$\pm 1\sigma$ Band')
     ax_diff.axhline(0, color='red', linestyle='--', linewidth=0.8)
     ax_diff.set_xscale('log')
     ax_diff.set_xlim(0.09, 42.0)
@@ -575,8 +734,8 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
     ax_diff.legend(loc='upper right', framealpha=0.8, fontsize=8)
 
     # Relative Fractional Uncertainty: sigma(q) / |I(q)| in percent
-    rel_err_perc = (sigma_ref / np.maximum(np.abs(i_ref), 1e-6)) * 100.0
-    ax_err.plot(q_ref, rel_err_perc, color='#CC79A7', linewidth=1.3)
+    rel_err_perc = (sigma_sub_1d / np.maximum(np.abs(i_all), 1e-6)) * 100.0
+    ax_err.plot(q_all, rel_err_perc, color='#CC79A7', linewidth=1.3)
     ax_err.axhline(5.0, color='darkgreen', linestyle=':', linewidth=1.0, label=r'5% Relative Error Threshold')
     ax_err.set_xscale('log')
     ax_err.set_yscale('log')
@@ -610,7 +769,7 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
     mask_cyan_pub.set_bad(alpha=0.0)
     axA.imshow(np.where(mask_full, 1.0, np.nan), origin='lower', cmap=mask_cyan_pub, alpha=1.0, interpolation='nearest')
     axA.plot(xcen, ycen, 'r+', markersize=12, markeredgewidth=2)
-    axA.set_title(r"$\mathbf{(a)}$ Raw Detector Image & Mask (Cyan)", pad=8)
+    axA.set_title(r"$\mathbf{(a)}$ Raw detector image and mask (cyan)", pad=8)
     axA.set_xlabel("Pixel X")
     axA.set_ylabel("Pixel Y")
     cbA = fig_pub.colorbar(imA, ax=axA, fraction=0.046, pad=0.04)
@@ -620,7 +779,7 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
     cmap_B = plt.cm.inferno.copy()
     cmap_B.set_bad('#111827')
     imB = axB.imshow(norm_sample_disp, origin='lower', cmap=cmap_B, norm=LogNorm(vmin=1e-6, vmax=1e-1))
-    axB.set_title(r"$\mathbf{(b)}$ Beam Monitor Normalized ($I / I_0$)", pad=8)
+    axB.set_title(r"$\mathbf{(b)}$ Beam monitor normalized ($I / I_0$)", pad=8)
     axB.set_xlabel("Pixel X")
     axB.set_ylabel("Pixel Y")
     cbB = fig_pub.colorbar(imB, ax=axB, fraction=0.046, pad=0.04)
@@ -630,7 +789,7 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
     cmap_C = plt.cm.inferno.copy()
     cmap_C.set_bad('#111827')
     imC = axC.imshow(norm_bkg_disp, origin='lower', cmap=cmap_C, norm=LogNorm(vmin=1e-6, vmax=1e-1))
-    axC.set_title(r"$\mathbf{(c)}$ Capillary Background ($I_{bkg} / I_{0,bkg}$)", pad=8)
+    axC.set_title(r"$\mathbf{(c)}$ Capillary background ($I_{\mathrm{bkg}} / I_{0,\mathrm{bkg}}$)", pad=8)
     axC.set_xlabel("Pixel X")
     axC.set_ylabel("Pixel Y")
     cbC = fig_pub.colorbar(imC, ax=axC, fraction=0.046, pad=0.04)
@@ -641,7 +800,7 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
     cmap_D.set_bad('#111827')
     imD = axD.imshow(img_sub_2d_masked, origin='lower', cmap=cmap_D,
                     norm=SymLogNorm(linthresh=0.01, linscale=1.0, vmin=-0.2, vmax=5.0))
-    axD.set_title(r"$\mathbf{(d)}$ Net Sample 2D Pattern ($I_{sub}$)", pad=8)
+    axD.set_title(r"$\mathbf{(d)}$ Net 2D scattering pattern (diagnostic)", pad=8)
     axD.set_xlabel("Pixel X")
     axD.set_ylabel("Pixel Y")
     cbD = fig_pub.colorbar(imD, ax=axD, fraction=0.046, pad=0.04)
@@ -650,22 +809,25 @@ def run_single_scan_reduction(scan_num=184, frame_num=1, bkg_scan=63, bkg_frame=
     imE = axE.imshow(cake_disp, origin='lower', aspect='auto', cmap='inferno',
                      extent=[q_cake.min(), q_cake.max(), chi_cake.min(), chi_cake.max()],
                      norm=LogNorm(vmin=1e-2, vmax=10))
-    axE.set_title(r"$\mathbf{(e)}$ Azimuthal Transformation $I(q, \chi)$", pad=8)
+    axE.set_title(r"$\mathbf{(e)}$ Azimuthal transformation $I(q, \chi)$", pad=8)
     axE.set_xlabel(r"$q\ [\mathrm{nm}^{-1}]$")
     axE.set_ylabel(r"$\chi\ [^\circ]$")
     cbE = fig_pub.colorbar(imE, ax=axE, fraction=0.046, pad=0.04)
     cbE.set_label(r"$I(q, \chi)\ [\mathrm{cm}^{-1}]$", fontsize=9)
 
-    # Panel F with shaded uncertainty ribbon
-    axF.plot(q_ref, i_ref, color='#1f77b4', linewidth=1.8, label=r'All ($0^\circ - 360^\circ$)')
-    axF.fill_between(q_ref, i_ref - sigma_ref, i_ref + sigma_ref, color='#1f77b4', alpha=0.25, label=r'$\pm 1\sigma_I$ Error Band')
+    # Panel F with shaded uncertainty ribbon (integrated first, then subtracted)
+    axF.plot(q_all, i_sam_scaled, color='#7293cb', linewidth=1.1, linestyle=':', alpha=0.8, label=r'Measured $I_{\mathrm{meas}}(q)$')
+    axF.plot(q_all, i_bkg_scaled, color='#d95f02', linewidth=1.1, linestyle='--', alpha=0.8, label=r'Capillary Bkg $I_{\mathrm{bkg}}(q)$')
+    axF.plot(q_all, i_all, color='#1f77b4', linewidth=1.8, label=r'Net Profile ($I_{\mathrm{meas}} - I_{\mathrm{bkg}}$)')
+    axF.fill_between(q_all, i_all - sigma_sub_1d, i_all + sigma_sub_1d, color='#1f77b4', alpha=0.25, label=r'$\pm 1\sigma_I$ Error Band')
+    axF.plot(q_ref, i_ref, color='black', linewidth=0.9, linestyle='-.', alpha=0.6, label='Spiger Ref')
     axF.plot(q_meridian, i_meridian, color='#ff7f0e', linewidth=1.3, linestyle='--', label=r'Meridian ($45^\circ - 135^\circ$)')
     axF.plot(q_equatorial, i_equatorial, color='#2ca02c', linewidth=1.3, linestyle=':', label=r'Equatorial ($-45^\circ - 45^\circ$)')
     axF.set_yscale('log')
     axF.set_xscale('log')
     axF.set_xlim(0.09, 42.0)
     axF.set_ylim(1e-3, 4e1)
-    axF.set_title(r"$\mathbf{(f)}$ Calibrated 1D Profile with Uncertainty", pad=8)
+    axF.set_title(r"$\mathbf{(f)}$ Calibrated 1D profile and background subtraction", pad=8)
     axF.set_xlabel(r"Scattering Vector $q\ [\mathrm{nm}^{-1}]$")
     axF.set_ylabel(r"Cross-Section $\frac{d\Sigma}{d\Omega}(q)\ [\mathrm{cm}^{-1}]$")
     axF.grid(True, which="both", ls="-", alpha=0.2)
@@ -821,9 +983,9 @@ def main():
     if args.all or (args.series is None):
         run_single_scan_reduction(scan_num=args.scan, frame_num=args.frame, bkg_scan=args.bkg)
 
-    if args.series is not None:
-        start_s = args.series[0]
-        end_s = args.series[1]
+    if args.all or (args.series is not None):
+        start_s = 184 if args.series is None else args.series[0]
+        end_s = 292 if args.series is None else args.series[1]
         run_time_series_analysis(start_scan=start_s, end_scan=end_s)
 
     print("\n" + "=" * 70)
